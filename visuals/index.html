@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TinyTapeout VGA Circuits Simulator</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<p id="err" hidden style="margin:8px;padding:8px;background:#400;color:#fcc;font-family:monospace;font-size:13px;"></p>
+<div id="demo">
+    <canvas id="c"></canvas>
+    <div id="controls">
+        <div id="phase">phase</div>
+        <div>
+            Speed: <div id="speed_display"></div>
+            <input id="speed" type="range" min="-5" max="16" value="0">
+        </div>
+        <div>
+            Show:
+            <select id="show_select">
+                <option value="circuit+screen">circuit+screen</option>
+                <option value="screen">screen</option>
+                <option value="circuit">circuit</option>
+            </select>
+        </div>
+        <div>
+            Circuit GPU:
+            <select id="circuit_viz" title="Default is minimal (better on Windows ANGLE). Full = fancy shaders.">
+                <option value="minimal" selected>minimal (default)</option>
+                <option value="full">full</option>
+                <option value="probe">probe (clock only)</option>
+                <option value="off">off (diagnostics)</option>
+            </select>
+        </div>
+        <pre id="circuit_diag" class="circuit-diag" hidden></pre>
+        <div>
+            <span id="circuit_label">gds/circuit_pack.bin</span>
+            <span id="circuit_info"></span>
+        </div>
+        <p class="local-hint">Layout pack (gates/wires from <strong>your</strong> P&amp;R GDS), not RTL. Export to <code>gds/circuit_pack.bin</code> (e.g. znah/tt09 <code>parse_gds</code>). WASM loads from this folder. Debug: <code>?circuitViz=off</code> skips all circuit WebGL; <code>probe</code> draws only the clock (6 instances); <code>minimal</code> skips smoothState and uses simpler shaders.</p>
+    </div>
+    <div id="view_controls">
+        <button id="zoom_in" title="Zoom In">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line><line x1="11" y1="8" x2="11" y2="14"></line><line x1="8" y1="11" x2="14" y2="11"></line></svg>
+        </button>
+        <button id="zoom_out" title="Zoom Out">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line><line x1="8" y1="11" x2="14" y2="11"></line></svg>
+        </button>
+        <button id="toggle_rotate">
+            <svg class="icon-rotate" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: none;"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+            <svg class="icon-move" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 9 2 12 5 15"></polyline><polyline points="9 5 12 2 15 5"></polyline><polyline points="15 19 12 22 9 19"></polyline><polyline points="19 9 22 12 19 15"></polyline><line x1="2" y1="12" x2="22" y2="12"></line><line x1="12" y1="2" x2="12" y2="22"></line></svg>
+        </button>
+    </div>
+</div>
+
+<script src="swissgl.js?v=4"></script>
+<script src="sim.js?v=4"></script>
+<script>
+    "use strict";
+    const $ = q=>document.querySelector(q);
+    const canvas = $('#c');
+    const glsl = SwissGL(canvas);
+    const circuitVizSelect = $('#circuit_viz');
+    const circuitDiagEl = $('#circuit_diag');
+    let diagFrame = 0;
+
+    /** Single layout-pack URL: produced by your flow from GDS, not from Verilog sim. */
+    const CIRCUIT_PACK_URL = 'gds/circuit_pack.bin';
+    let sim;
+
+    const urlParams = new URLSearchParams(location.search);
+    const circuitVizQ = urlParams.get('circuitViz');
+    if (circuitVizQ && ['full', 'minimal', 'probe', 'off'].includes(circuitVizQ)) {
+        circuitVizSelect.value = circuitVizQ;
+    }
+
+    function syncCircuitVizPanel() {
+        if (!sim) return;
+        sim.circuitVizMode = circuitVizSelect.value;
+        if (circuitVizSelect.value === 'off') {
+            circuitDiagEl.hidden = false;
+            circuitDiagEl.textContent = sim.getPackDiagnostics();
+        } else {
+            circuitDiagEl.hidden = true;
+        }
+    }
+
+    circuitVizSelect.addEventListener('change', syncCircuitVizPanel);
+
+    async function init() {
+        sim = await VGASimulator.init(glsl);
+        await load_circuit();
+        syncCircuitVizPanel();
+        glsl.loop(frame);
+    }
+
+    async function load_circuit() {
+        $('#circuit_info').innerText = 'loading...';
+        $('#phase').innerText = 'row 0: init';
+        const response = await fetch(CIRCUIT_PACK_URL);
+        if (!response.ok) {
+            throw new Error(
+                `${CIRCUIT_PACK_URL} → HTTP ${response.status}. ` +
+                'Export your post-P&R GDS to that file (znah/tt09 parse_gds). After python run_sim.py, check for a NOTE about migrating an older pack name.'
+            );
+        }
+        const data = await response.arrayBuffer();
+        sim.load_circuit_bin(data);
+        $('#circuit_info').textContent = ` — ${data.byteLength.toLocaleString()} bytes`;
+        update_toggle_button();
+    }
+
+    function update_toggle_button() {
+        const toggleRotateBtn = $('#toggle_rotate');
+        const rotateIcon = toggleRotateBtn.querySelector('.icon-rotate');
+        const moveIcon = toggleRotateBtn.querySelector('.icon-move');
+        const rotateMode = sim.view.rotateMode;
+        toggleRotateBtn.style.backgroundColor = rotateMode ? 'rgba(100,100,0,0.5)' : 'rgba(0,0,0,0.5)';
+        rotateIcon.style.display = rotateMode ? 'block' : 'none';
+        moveIcon.style.display = rotateMode ? 'none' : 'block';
+        toggleRotateBtn.title = rotateMode ? 'Rotate mode. Click to switch to move.' : 'Move mode. Click to switch to rotate.';
+    }
+
+    const zoomInBtn = $('#zoom_in');
+    const zoomOutBtn = $('#zoom_out');
+    const toggleRotateBtn = $('#toggle_rotate');
+    zoomInBtn.onclick = () => {
+        sim.view.log2zoom += 0.5;
+    };
+    zoomOutBtn.onclick = () => {
+        sim.view.log2zoom = Math.max(0.0, sim.view.log2zoom - 0.5);
+    };
+    toggleRotateBtn.onclick = () => {
+        sim.view.rotateMode = !sim.view.rotateMode;
+        update_toggle_button();
+    };
+
+    function updateStatus(line) {
+        let status = 'copy the previous row';
+        if (line < 0 || line >= VGA_SCREEN_H) {
+            status = 'offscreen (skip)';
+        } else if (line == 0) {
+            status = 'recall the starting row';
+        } else if (line == 4) {
+            status = 'rule application + store the first row for the next frame'
+        } else if (line%4 == 0) {
+            status = 'apply CA rule';
+        }
+        $('#phase').innerText = `row ${line}: ${status}`;
+    }
+
+    function frame() {
+        glsl.adjustCanvas();
+        sim.circuitVizMode = circuitVizSelect.value;
+        if (circuitVizSelect.value === 'off' && (++diagFrame % 45 === 0)) {
+            circuitDiagEl.textContent = sim.getPackDiagnostics();
+        }
+
+        const speed = $('#speed').value;
+        $('#speed_display').textContent = '2^'+speed;
+        const step_n = Math.pow(2, speed);
+        sim.multistep(step_n, updateStatus);
+
+        // After simulation GPU uploads, reset default framebuffer and clear color+depth so the
+        // circuit pass is not depth-rejected (VGA overlay must not leave z≈0 in the depth buffer).
+        const gl = glsl.gl;
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+        gl.clearColor(0.133, 0.133, 0.133, 1.0);
+        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+        const show = $('#show_select').value;
+        if (show =='circuit') {
+            sim.draw_circuit(step_n);
+        } else if (show == 'screen') {
+            sim.draw_screen(step_n, true);
+        } else if (show == 'circuit+screen') {
+            sim.draw_circuit(step_n);
+            sim.draw_screen(step_n, false);
+        }
+    }
+
+    const errEl = document.getElementById('err');
+    init().catch((e) => {
+        console.error(e);
+        errEl.hidden = false;
+        errEl.textContent =
+            'Viewer failed to start: ' + e +
+            ' — run: python visuals/serve_circuit_viewer.py --sync-only then hard-refresh. ' +
+            'If you use Live Server, wrong WASM MIME types used to break loading; re-sync applies a fix in sim.js. ' +
+            'Cursor/VS Code Simple Browser often cannot open http://127.0.0.1:8765 — use Chrome/Edge or Live Server.';
+    });
+</script>
+</body>
+</html>

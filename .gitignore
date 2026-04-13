@@ -1,14 +1,32 @@
+# OS / IDE
 .DS_Store
-.idea
+.idea/
+
+# Simulation & tests
 *.vcd
-runs
-tt/
-~/ttsetup
-obj_dir/
-tt_submission
-src/user_config.json
-src/config_merged.json
-test/sim_build
-test/__pycache__/
+test/sim_build/
 test/results.xml
 test/gate_level_netlist.v
+
+# Python
+**/__pycache__/
+
+# Tiny Tapeout / local build outputs
+runs/
+tt/
+obj_dir/
+tt_submission/
+src/user_config.json
+src/config_merged.json
+
+# Optional / legacy paths under test/
+test/_znah_tt09/
+test/circuit_viewer/
+
+# visuals: copied from znah/tt09 (run serve_circuit_viewer.py --sync-only)
+visuals/_znah_tt09/
+visuals/gates.wasm
+visuals/sim.js
+visuals/swissgl.js
+visuals/gds/
+visuals/screen.png

@@ -12,7 +12,7 @@ async def test_project(dut):
     dut._log.info("Start")
 
     # Set the clock period to 1/26 us (25 MHz)
-    clock = Clock(dut.clk, 1/25, units="us")
+    clock = Clock(dut.clk, 1/25, unit="us")
     cocotb.start_soon(clock.start())
 
     # Reset
@@ -48,7 +48,6 @@ async def test_project(dut):
 
     dut._log.info("Test project behavior")
 
-    print(dir(dut.uo_out))
     for i in range(ROW_CLOCKS*4*8):
         await FallingEdge(dut.clk)
         # if pixel_x < W and pixel_y<H:

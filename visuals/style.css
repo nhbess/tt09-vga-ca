@@ -1,0 +1,83 @@
+*, *::before,*::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: Verdana, Geneva, Tahoma, sans-serif
+}
+body, html {
+    margin: 0; padding: 0; color:#8d7;
+    font-size: 16px;
+    background-color: #222;
+}
+#demo {
+    width:100vw;
+    height: 100vh;
+    position: relative;
+}
+#c {
+    width:100%;
+    height: 100%;
+    cursor: grab;
+    touch-action: none;
+}
+#controls {
+    position: absolute;
+    margin: 0 20px;
+    bottom: 0px;
+    background-color: rgba(0,0,0,0.5);
+    line-height: 1.4;
+}
+#phase {
+    margin-bottom: 6px;
+}
+.circuit-diag {
+    margin: 8px 0 0;
+    padding: 8px;
+    max-height: 11em;
+    overflow: auto;
+    font-family: ui-monospace, Consolas, monospace;
+    font-size: 12px;
+    line-height: 1.35;
+    color: #9db;
+    background: rgba(0, 24, 20, 0.85);
+    border: 1px solid #345;
+    white-space: pre-wrap;
+}
+#speed {
+    width: 200px;
+}
+#speed_display {
+    display: inline-block;
+    width: 50px;
+    text-align: right;
+}
+#view_controls {
+    position: absolute;
+    right: 10px;
+    bottom: 0px;
+    display: flex;
+    flex-direction: column;
+}
+#view_controls button {
+    width: 40px;
+    height: 40px;
+    margin-bottom: 6px;
+    background-color: rgba(0,0,0,0.5);
+    color: #8d7;
+    border: 1px solid #8d7;
+    cursor: pointer;
+    padding: 8px;
+}
+#view_controls button:hover {
+    background-color: rgba(50,50,50,0.5);
+}
+.local-hint {
+    margin-top: 8px;
+    max-width: 36rem;
+    font-size: 11px;
+    line-height: 1.35;
+    opacity: 0.75;
+}
+.local-hint code {
+    font-size: 10px;
+}
